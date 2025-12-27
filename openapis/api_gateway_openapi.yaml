@@ -1,0 +1,492 @@
+openapi: "3.1.0"
+
+info:
+  title: "HRom API"
+  description: "API для проекта HRom (Microservices: Auth, User, CV, Assessment, Subscriptions)"
+  version: "1.0.0"
+
+servers:
+  - url: http://server:8080
+    description: API Gateway
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/auth/register:
+    post:
+      summary: Регистрация
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Успешная регистрация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Почта уже занята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      summary: Вход
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Неверные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/refresh:
+    post:
+      summary: Обновление access token
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Токены обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Невалидный refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/password-recovery:
+    post:
+      summary: Запрос на сброс пароля
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRecoveryRequest'
+      responses:
+        '200':
+          description: Письмо отправлено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+
+  /api/auth/email-change:
+    post:
+      summary: Смена email пользователя
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+      responses:
+        '200':
+          description: Email успешно изменен
+        '400':
+          description: Неверный пароль или email занят
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/me:
+    get:
+      summary: Получить мой профиль
+      tags: [User Profile]
+      responses:
+        '200':
+          description: Данные профиля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    patch:
+      summary: Обновить мой профиль
+      tags: [User Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileUpdate'
+      responses:
+        '200':
+          description: Профиль обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /api/cvs:
+    get:
+      summary: Получить список моих резюме
+      tags: [CV]
+      responses:
+        '200':
+          description: Список резюме
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CVItem'
+    post:
+      summary: Загрузить новое резюме
+      tags: [CV]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string,  format: binary }
+      responses:
+        '202':
+          description: Файл принят в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVItem'
+        '403':
+          description: Лимит загрузок исчерпан
+
+  /api/cvs/{id}:
+    get:
+      summary: Получить детали резюме и результат анализа
+      tags: [CV]
+      parameters:
+        - in: path
+          name: id
+          schema: { type: string }
+          required: true
+      responses:
+        '200':
+          description: Полные данные резюме
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVDetail'
+        '404':
+          description: Резюме не найдено
+
+  /api/questions:
+    get:
+      summary: Получить список вопросов
+      tags: [Assessment]
+      responses:
+        '200':
+          description: Список вопросов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Question'
+
+  /api/questions/{id}/answers:
+    post:
+      summary: Отправить ответ на вопрос
+      tags: [Assessment]
+      parameters:
+        - in: path
+          name: id
+          schema: { type: string }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        '201':
+          description: Ответ принят в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerShort'
+        '403':
+          description: Лимит ответов исчерпан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Вопрос не найден
+
+  /api/answers/{id}:
+    get:
+      summary: Получить ответ и результат анализа
+      tags: [Assessment]
+      parameters:
+        - in: path
+          name: id
+          description: ID ответа (answer_id)
+          schema: { type: string }
+          required: true
+      responses:
+        '200':
+          description: Результат анализа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerDetail'
+
+  /api/plans:
+    get:
+      summary: Получить список тарифов
+      security: []
+      tags: [Subscriptions]
+      responses:
+        '200':
+          description: Список тарифов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+
+  /api/subscriptions:
+    post:
+      summary: Оформить подписку
+      tags: [Subscriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string }
+      responses:
+        '201':
+          description: Подписка оформлена
+        '400':
+          description: Неверный план или ошибка оплаты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/subscriptions/me:
+    get:
+      summary: Моя текущая подписка и лимиты
+      tags: [Subscriptions]
+      responses:
+        '200':
+          description: Статус подписки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionStatus'
+
+  /api/subscriptions/promocode:
+    post:
+      summary: Активировать промокод
+      tags: [Subscriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: Промокод применен
+        '404':
+          description: Промокод не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+
+    RefreshTokenRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    PasswordRecoveryRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+    
+    EmailChangeRequest:
+      type: object
+      required: [new_email, password]
+      properties:
+        new_email: { type: string }
+        password: { type: string }
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+
+    UserResponse:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        created_at: { type: string }
+
+    UserProfile:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        company: { type: string }
+        phone_number: { type: string }
+        
+    UserProfileUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        company: { type: string }
+        phone_number: { type: string }
+
+    CVItem:
+      type: object
+      properties:
+        id: { type: string }
+        filename: { type: string }
+        status: { type: string,  enum: [UPLOADED, PROCESSING, COMPLETED, FAILED] }
+        created_at: { type: string }
+
+    CVDetail:
+      allOf:
+        - $ref: '#/components/schemas/CVItem'
+        - type: object
+          properties:
+            analysis: { type: object }
+
+    Question:
+      type: object
+      properties:
+        id: { type: string }
+        content: { type: string }
+
+    AnswerShort:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string }
+
+    AnswerDetail:
+      type: object
+      properties:
+        id: { type: string }
+        question_id: { type: string }
+        content: { type: string }
+        status: { type: string, enum: [UPLOADED, PROCESSING, COMPLETED, FAILED] }
+        analysis: { type: object }
+
+    Plan:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        quotas: { type: object }
+    
+    SubscriptionStatus:
+      type: object
+      properties:
+        plan_id: { type: string }
+        end_date: { type: string }
+        is_active: { type: boolean }
+        quotas:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { type: string }
+              limit: { type: integer }
+              used: { type: integer }
+
+    ErrorResponse:
+      type: object
+      properties:
+        status: { type: integer }
+        message: { type: string }

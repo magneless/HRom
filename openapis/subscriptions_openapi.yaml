@@ -1,0 +1,161 @@
+openapi: "3.1.0"
+
+info:
+  title: "Subscriptions Internal Service API"
+  description: "Внутренний API сервиса подписок. Управляет тарифами, покупками и списанием квот."
+  version: "1.0.0"
+
+servers:
+  - url: http://server:8085
+    description: Internal Subscriptions Service
+
+paths:
+  /plans:
+    get:
+      summary: Получить список тарифов
+      responses:
+        '200':
+          description: Список тарифов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+
+  /subscriptions:
+    post:
+      summary: Оформить подписку
+      parameters:
+        - $ref: '#/components/parameters/XUserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string }
+      responses:
+        '201':
+          description: Подписка оформлена
+        '400':
+          description: Неверный ID плана или ошибка оплаты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не передан X-User-Id
+
+  /subscriptions/me:
+    get:
+      summary: Моя текущая подписка и лимиты
+      parameters:
+        - $ref: '#/components/parameters/XUserIdHeader'
+      responses:
+        '200':
+          description: Статус подписки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionStatus'
+        '401':
+          description: Не передан X-User-Id
+
+  /subscriptions/promocode:
+    post:
+      summary: Активировать промокод
+      parameters:
+        - $ref: '#/components/parameters/XUserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: Промокод применен
+        '404':
+          description: Промокод не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /subscriptions/consume:
+    post:
+      summary: Списать квоту
+      description:
+        "Вызывается сервисами CV и Assessment. Проверяет наличие квот и списывает их."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumeRequest'
+      responses:
+        '200':
+          description: Квота успешно списана. Разрешение получено.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  remaining: { type: integer }
+        '403':
+          description: Лимит исчерпан или нет активной подписки. Действие запрещено.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    XUserIdHeader:
+      in: header
+      name: X-User-Id
+      description: ID пользователя (переданный от API Gateway)
+      required: true
+      schema: { type: string }
+
+  schemas:
+    Plan:
+      properties:
+        id: { type: string }
+        name: { type: string }
+        quotas: { type: object }
+
+    SubscriptionStatus:
+      type: object
+      properties:
+        plan_id: { type: string }
+        end_date: { type: string }
+        is_active: { type: boolean }
+        quotas:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { type: string }
+              limit: { type: integer }
+              used: { type: integer }
+
+    ConsumeRequest:
+      type: object
+      required: [user_id, resource, amount]
+      properties:
+        user_id: { type: string }
+        resource: { type: string }
+        amount: { type: integer }
+
+    ErrorResponse:
+      type: object
+      properties:
+        status: { type: integer }
+        message: { type: string }

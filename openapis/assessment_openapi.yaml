@@ -1,0 +1,123 @@
+openapi: "3.1.0"
+
+info:
+  title: "Assessment Internal Service API"
+  description: "Внутренний API сервиса оценки. Управляет банком вопросов и проверкой ответов пользователей."
+  version: "1.0.0"
+
+servers:
+  - url: http://server:8084
+    description: Internal Assessment Service
+
+paths:
+  /questions:
+    get:
+      summary: Получить список вопросов
+      parameters:
+        - $ref: '#/components/parameters/XUserIdHeader'
+      responses:
+        '200':
+          description: Список вопросов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Question'
+
+  /questions/{id}/answers:
+    post:
+      summary: Отправить ответ на вопрос
+      description:
+        "1. Проверяет квоты (через Subscriptions).
+        2. Сохраняет ответ.
+        3. Отправляет событие questions.uploaded в message queue для анализа."
+      parameters:
+        - $ref: '#/components/parameters/XUserIdHeader'
+        - in: path
+          name: id
+          schema: { type: string }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        '201':
+          description: Ответ принят в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerShort'
+        '403':
+          description: Лимит ответов исчерпан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Вопрос не найден
+
+  /answers/{id}:
+    get:
+      summary: Получить ответ и результат анализа
+      parameters:
+        - $ref: '#/components/parameters/XUserIdHeader'
+        - in: path
+          name: id
+          description: ID ответа (answer_id)
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Результат анализа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerDetail'
+        '404':
+          description: Ответ не найден или принадлежит другому пользователю
+
+components:
+  parameters:
+    XUserIdHeader:
+      in: header
+      name: X-User-Id
+      description: ID пользователя (от Gateway)
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Question:
+      type: object
+      properties:
+        id: { type: string }
+        content: { type: string }
+
+    AnswerShort:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string }
+
+    AnswerDetail:
+      type: object
+      properties:
+        id: { type: string }
+        question_id: { type: string }
+        content: { type: string }
+        status: { type: string, enum: [UPLOADED, PROCESSING, COMPLETED, FAILED] }
+        analysis: { type: object }
+
+    ErrorResponse:
+      type: object
+      properties:
+        status: { type: integer }
+        message: { type: string }

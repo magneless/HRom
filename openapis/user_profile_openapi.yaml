@@ -1,0 +1,96 @@
+openapi: "3.1.0"
+
+info:
+  title: "User Profile Internal Service"
+  description: "Внутренний API сервиса профилей. Управляет личными данными пользователей."
+  version: "1.0.0"
+
+servers:
+  - url: http://server:8082
+    description: Internal User Profile Service
+
+paths:
+  /users/me:
+    get:
+      summary: Получить профиль текущего пользователя
+      parameters:
+        - in: header
+          name: X-User-Id
+          description: ID пользователя, переданный от API Gateway
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Успешный запрос
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Не передан заголовок X-User-Id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Профиль не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      summary: Обновить данные профиля
+      parameters:
+        - in: header
+          name: X-User-Id
+          description: ID пользователя, переданный от API Gateway
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: Профиль успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    UserProfile:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        company: { type: string }
+        phone_number: { type: string }
+        created_at: { type: string }
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        company: { type: string }
+        phone_number: { type: string }
+
+    ErrorResponse:
+      type: object
+      properties:
+        status: { type: integer }
+        message: { type: string }

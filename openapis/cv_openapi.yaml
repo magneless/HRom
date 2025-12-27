@@ -1,0 +1,128 @@
+openapi: "3.1.0"
+
+info:
+  title: "CV Internal Service API"
+  description: "Внутренний API сервиса резюме. Отвечает за загрузку cv (S3) и выдачу результатов анализа cv."
+  version: "1.0.0"
+
+servers:
+  - url: http://server:8083
+    description: Internal CV Service
+
+paths:
+  /cvs:
+    get:
+      summary: Получить список моих резюме
+      parameters:
+        - in: header
+          name: X-User-Id
+          description: ID пользователя (от Gateway)
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Список резюме
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CVItem'
+        '401':
+          description: Не передан X-User-Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Загрузить новое резюме
+      description: 
+        "1. Проверяет квоты в Subscriptions Service.
+        2. Загружает файл в S3.
+        3. Создает запись в БД.
+        4. Отправляет событие cv.uploaded в message queue."
+      parameters:
+        - in: header
+          name: X-User-Id
+          description: ID пользователя (от Gateway)
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Резюме успешно загружено и отправлено на анализ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVItem'
+        '400':
+          description: Недопустимый формат файла или файл слишком большой
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Лимит загрузок исчерпан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cvs/{id}:
+    get:
+      summary: Получить детали резюме
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Детальная информация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVDetail'
+        '404':
+          description: Резюме не найдено или принадлежит другому пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    CVItem:
+      type: object
+      required: [id, filename, status, created_at]
+      properties:
+        id: { type: string }
+        filename: { type: string }
+        status: { type: string, enum: [UPLOADED, PROCESSING, COMPLETED, FAILED] }
+        created_at: { type: string }
+
+    CVDetail:
+      allOf:
+        - $ref: '#/components/schemas/CVItem'
+        - type: object
+          properties:
+            analysis: { type: object }
+
+    ErrorResponse:
+      type: object
+      properties:
+        status: { type: integer }
+        message: { type: string }
